@@ -9,11 +9,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+} from "@/components/ui/chart";
+import { Pie, PieChart } from "recharts";
 import { useState } from "react";
 
 const SUPABASE_URL = process.env.SUPABASE || "";
 const AWS_URL = process.env.AWS || "";
 const GCLOUD_URL = process.env.GOOGLE_CLOUD || "";
+
+const macroChartConfig = {
+  carbs: {
+    label: "Carboidratos",
+    color: "#3b82f6", 
+  },
+  proteins: {
+    label: "Proteínas",
+    color: "#ef4444", 
+  },
+  fats: {
+    label: "Gorduras",
+    color: "#f59e0b", 
+  },
+};
+
+const USE_MOCK = true;
 
 export default function Dashboard() {
   const [formData, setFormData] = useState({
@@ -46,6 +71,44 @@ export default function Dashboard() {
     const heightNum = parseFloat(formData.height);
     const ageNum = parseInt(formData.age);
 
+    if (USE_MOCK) {
+      setTimeout(() => {
+        setResults({
+          supabase: {
+            data: {
+              imc: weightNum / (heightNum * heightNum),
+              classification: "Peso Normal (Mock)",
+              tmb: 1850,
+            },
+            latency: 125,
+            fallback: false, 
+          },
+          aws: {
+            data: {
+              calories: 2400,
+              carbs: 250,
+              proteins: 160,
+              fats: 85,
+            },
+            latency: 240,
+            error: false, 
+          },
+          gcp: {
+            data: {
+              water_liters: 3.5,
+              sleep_hours: 8,
+              recommendation:
+                "Mantenha a hidratação constante durante o dia. (Mock)",
+            },
+            latency: 180,
+            error: false, 
+          },
+        });
+        setLoading(false);
+      }, 800);
+      return; 
+    }
+
     const startTimeParallel = performance.now();
 
     const supabasePromise = fetch(SUPABASE_URL, {
@@ -67,10 +130,7 @@ export default function Dashboard() {
         };
       })
       .catch((err) => {
-        console.warn(
-          "Supabase failed, triggering local fallback calculation",
-          err,
-        );
+        console.warn("Supabase failed, fallback local ativado", err);
         let localTmb =
           88.362 +
           13.397 * weightNum +
@@ -131,7 +191,7 @@ export default function Dashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tmb: supabaseRes.data.tmb, // Fed directly from prior response block output
+          tmb: supabaseRes.data.tmb,
           activity_level: parseFloat(formData.activityLevel),
           objective: formData.objective,
         }),
@@ -154,6 +214,27 @@ export default function Dashboard() {
     setLoading(false);
   };
 
+  const macroData =
+    results.aws && !results.aws.error
+      ? [
+          {
+            macro: "carbs",
+            value: results.aws.data.carbs,
+            fill: "var(--color-carbs)",
+          },
+          {
+            macro: "proteins",
+            value: results.aws.data.proteins,
+            fill: "var(--color-proteins)",
+          },
+          {
+            macro: "fats",
+            value: results.aws.data.fats,
+            fill: "var(--color-fats)",
+          },
+        ]
+      : [];
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
       <header className="border-b pb-4 text-center">
@@ -169,7 +250,7 @@ export default function Dashboard() {
         onSubmit={handleSubmit}
         className="bg-card text-card-foreground border rounded-xl p-6 shadow-sm space-y-6"
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
           <div className="space-y-2">
             <Label htmlFor="weight">Peso (kg)</Label>
             <Input
@@ -221,13 +302,36 @@ export default function Dashboard() {
               onValueChange={(value) =>
                 setFormData((prev) => ({ ...prev, gender: value }))
               }
+              required
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione o sexo" />
+                <SelectValue placeholder="Selecione" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="male">Masculino</SelectItem>
                 <SelectItem value="female">Feminino</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Nível de Atividade</Label>
+            <Select
+              value={formData.activityLevel}
+              onValueChange={(value) =>
+                setFormData((prev) => ({ ...prev, activityLevel: value }))
+              }
+              required
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o nível" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1.2">Sedentário (Pouco/Nenhum)</SelectItem>
+                <SelectItem value="1.375">Leve (1-3 dias/sem)</SelectItem>
+                <SelectItem value="1.55">Moderado (3-5 dias/sem)</SelectItem>
+                <SelectItem value="1.725">Ativo (6-7 dias/sem)</SelectItem>
+                <SelectItem value="1.9">Muito Ativo (Físico)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -239,9 +343,10 @@ export default function Dashboard() {
               onValueChange={(value) =>
                 setFormData((prev) => ({ ...prev, objective: value }))
               }
+              required
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione o objetivo" />
+                <SelectValue placeholder="Selecione" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="deficit">Déficit Calórico</SelectItem>
@@ -258,9 +363,10 @@ export default function Dashboard() {
               onValueChange={(value) =>
                 setFormData((prev) => ({ ...prev, intensity: value }))
               }
+              required
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione a intensidade" />
+                <SelectValue placeholder="Selecione" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="light">Leve</SelectItem>
@@ -283,117 +389,134 @@ export default function Dashboard() {
       </form>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white border rounded-xl p-5 shadow-sm relative flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <span className="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-0.5 rounded">
-                ⚡ Supabase Edge
-              </span>
-              {results.supabase && (
-                <span className="text-xs text-gray-400 font-mono">
-                  {results.supabase.latency.toFixed(0)}ms
-                </span>
-              )}
-            </div>
-            <h3 className="font-bold text-lg text-slate-800 mb-2">
-              Índices Corporais
-            </h3>
+        <div className="bg-white border rounded-xl p-5 shadow-sm flex flex-col justify-start">
+          <div className="flex justify-between items-center mb-4">
+            <span className="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-0.5 rounded">
+              ⚡ Supabase Edge
+            </span>
             {results.supabase && (
-              <div className="text-sm space-y-1 text-slate-700">
-                <p>
-                  <strong>IMC:</strong> {results.supabase.data.imc.toFixed(1)}
-                </p>
-                <p>
-                  <strong>Classificação:</strong>{" "}
-                  {results.supabase.data.classification}
-                </p>
-                <p>
-                  <strong>TMB Base:</strong>{" "}
-                  {results.supabase.data.tmb.toFixed(0)} kcal
-                </p>
-              </div>
+              <span className="text-xs text-gray-400 font-mono">
+                {results.supabase.latency.toFixed(0)}ms
+              </span>
             )}
           </div>
+          <h3 className="font-bold text-lg text-slate-800 mb-2">
+            Índices Corporais
+          </h3>
+          {results.supabase && (
+            <div className="text-sm space-y-2 text-slate-700 mt-2">
+              <div className="flex justify-between border-b pb-1">
+                <span>IMC</span>
+                <strong>{results.supabase.data.imc.toFixed(1)}</strong>
+              </div>
+              <div className="flex justify-between border-b pb-1">
+                <span>Classificação</span>
+                <strong>{results.supabase.data.classification}</strong>
+              </div>
+              <div className="flex justify-between pb-1">
+                <span>TMB Base</span>
+                <strong>{results.supabase.data.tmb.toFixed(0)} kcal</strong>
+              </div>
+            </div>
+          )}
           {results.supabase?.fallback && (
             <div className="mt-4 bg-amber-50 text-amber-800 border border-amber-200 text-xs p-2 rounded">
-              ⚠️ Usando TMB Contingencial (Módulo Fora do Ar)
+              ⚠️ Usando TMB Contingencial
             </div>
           )}
         </div>
 
-        <div className="bg-white border rounded-xl p-5 shadow-sm relative flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <span className="bg-orange-100 text-orange-800 text-xs font-bold px-2.5 py-0.5 rounded">
-                📦 AWS Lambda
-              </span>
-              {results.aws && !results.aws.error && (
-                <span className="text-xs text-gray-400 font-mono">
-                  {results.aws.latency.toFixed(0)}ms
-                </span>
-              )}
-            </div>
-            <h3 className="font-bold text-lg text-slate-800 mb-2">
-              Metas Calóricas & Macros
-            </h3>
+        <div className="bg-white border rounded-xl p-5 shadow-sm flex flex-col justify-start">
+          <div className="flex justify-between items-center mb-4">
+            <span className="bg-orange-100 text-orange-800 text-xs font-bold px-2.5 py-0.5 rounded">
+              📦 AWS Lambda
+            </span>
             {results.aws && !results.aws.error && (
-              <div className="text-sm space-y-1 text-slate-700">
-                <p>
-                  <strong>Meta Diária:</strong> {results.aws.data.calories} kcal
-                </p>
-                <p>
-                  <strong>Carboidratos:</strong> {results.aws.data.carbs}g
-                </p>
-                <p>
-                  <strong>Proteínas:</strong> {results.aws.data.proteins}g
-                </p>
-                <p>
-                  <strong>Gorduras:</strong> {results.aws.data.fats}g
-                </p>
-              </div>
+              <span className="text-xs text-gray-400 font-mono">
+                {results.aws.latency.toFixed(0)}ms
+              </span>
             )}
           </div>
+          <h3 className="font-bold text-lg text-slate-800 mb-2">
+            Metas & Macros
+          </h3>
+          {results.aws && !results.aws.error && (
+            <>
+              <p className="text-sm text-slate-700 mb-4 font-semibold">
+                Meta Diária: {results.aws.data.calories} kcal
+              </p>
+
+              <ChartContainer
+                config={macroChartConfig}
+                className="h-[180px] w-full"
+              >
+                <PieChart>
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent hideLabel />}
+                  />
+                  <Pie
+                    data={macroData}
+                    dataKey="value"
+                    nameKey="macro"
+                    innerRadius={50}
+                    strokeWidth={5}
+                  />
+                  <ChartLegend
+                    content={<ChartLegendContent />}
+                    className="flex-wrap"
+                  />
+                </PieChart>
+              </ChartContainer>
+            </>
+          )}
           {results.aws?.error && (
             <div className="mt-4 bg-red-50 text-red-700 border border-red-200 text-xs p-2 rounded">
-              ❌ Serviço Temporariamente Indisponível
+              ❌ Serviço Indisponível
             </div>
           )}
         </div>
 
-        <div className="bg-white border rounded-xl p-5 shadow-sm relative flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded">
-                ☁️ Google Cloud
-              </span>
-              {results.gcp && !results.gcp.error && (
-                <span className="text-xs text-gray-400 font-mono">
-                  {results.gcp.latency.toFixed(0)}ms
-                </span>
-              )}
-            </div>
-            <h3 className="font-bold text-lg text-slate-800 mb-2">
-              Hidratação & Sono
-            </h3>
+        <div className="bg-white border rounded-xl p-5 shadow-sm flex flex-col justify-start">
+          <div className="flex justify-between items-center mb-4">
+            <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded">
+              ☁️ Google Cloud
+            </span>
             {results.gcp && !results.gcp.error && (
-              <div className="text-sm space-y-1 text-slate-700">
-                <p>
-                  <strong>Meta de Água:</strong>{" "}
-                  {results.gcp.data.water_liters.toFixed(1)}L / dia
-                </p>
-                <p>
-                  <strong>Descanso Sugerido:</strong>{" "}
-                  {results.gcp.data.sleep_hours}h / noite
-                </p>
-                <p className="italic text-xs text-slate-500 mt-2">
-                  &quot;{results.gcp.data.recommendation}&quot;
-                </p>
-              </div>
+              <span className="text-xs text-gray-400 font-mono">
+                {results.gcp.latency.toFixed(0)}ms
+              </span>
             )}
           </div>
+          <h3 className="font-bold text-lg text-slate-800 mb-2">
+            Hidratação & Sono
+          </h3>
+          {results.gcp && !results.gcp.error && (
+            <div className="text-sm space-y-3 text-slate-700 mt-2">
+              <div className="p-3 bg-blue-50 rounded-lg text-blue-900 border border-blue-100">
+                <span className="block text-xs uppercase tracking-wider mb-1">
+                  Água Diária
+                </span>
+                <strong className="text-2xl">
+                  {results.gcp.data.water_liters.toFixed(1)}L
+                </strong>
+              </div>
+              <div className="p-3 bg-indigo-50 rounded-lg text-indigo-900 border border-indigo-100">
+                <span className="block text-xs uppercase tracking-wider mb-1">
+                  Descanso
+                </span>
+                <strong className="text-2xl">
+                  {results.gcp.data.sleep_hours}h
+                </strong>
+              </div>
+              <p className="italic text-xs text-slate-500 mt-2 leading-relaxed">
+                &quot;{results.gcp.data.recommendation}&quot;
+              </p>
+            </div>
+          )}
           {results.gcp?.error && (
             <div className="mt-4 bg-red-50 text-red-700 border border-red-200 text-xs p-2 rounded">
-              ❌ Serviço Temporariamente Indisponível
+              ❌ Serviço Indisponível
             </div>
           )}
         </div>
