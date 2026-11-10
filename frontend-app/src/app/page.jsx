@@ -19,9 +19,9 @@ import {
 import { Pie, PieChart } from "recharts";
 import { useState } from "react";
 
-const SUPABASE_URL = process.env.SUPABASE || "";
-const AWS_URL = process.env.AWS || "";
-const GCLOUD_URL = process.env.GOOGLE_CLOUD || "";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE || "";
+const AWS_URL = process.env.NEXT_PUBLIC_AWS || "";
+const GCLOUD_URL = process.env.NEXT_PUBLIC_GOOGLE_CLOUD || "";
 
 const macroChartConfig = {
   carbs: {
@@ -38,7 +38,7 @@ const macroChartConfig = {
   },
 };
 
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 export default function Dashboard() {
   const [formData, setFormData] = useState({
@@ -153,16 +153,18 @@ export default function Dashboard() {
           fallback: true,
         };
       });
-
+      
     const gcpPromise = fetch(GCLOUD_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         weight: weightNum,
+        wight: weightNum,
         intensity: formData.intensity,
       }),
     })
       .then(async (res) => {
+        console.log(res)
         if (!res.ok) throw new Error();
         return {
           data: await res.json(),
