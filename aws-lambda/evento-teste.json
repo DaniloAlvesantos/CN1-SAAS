@@ -1,0 +1,5 @@
+{
+  "requestContext": { "http": { "method": "POST" } },
+  "isBase64Encoded": false,
+  "body": "{\"tmb\":1600,\"activity_level\":1.55,\"objective\":\"maintenance\"}"
+}
